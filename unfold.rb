@@ -49,6 +49,10 @@ def flipped?(transformation)
   (product % transformation.zaxis).negative?
 end
 
+def same_plane?(plane1, plane2)
+  plane2[0].on_plane?(plane1) && plane2[1].parallel?(plane1[1])
+end
+
 # Unfold model to flat single plane.
 # Useful for parts being laser cut or printed on a single piece of paper.
 
@@ -140,14 +144,13 @@ class UnfoldTool
     faces = entities.grep(Sketchup::Face)
     return if faces.empty?
 
-    plane = [faces.first.vertices.first.position, faces.first.normal]
-
-    faces[1..-1].each do |face|
-      return unless face.vertices.first.position.on_plane?(plane)
-      return unless face.normal.parallel?(plane[1])
+    planes = faces.map do |face|
+      [face.vertices.first.position, face.normal]
     end
 
-    plane
+    return unless planes[1..-1].all? { |p| same_plane?(planes.first, p) }
+
+    planes.first
   end
 end
 
