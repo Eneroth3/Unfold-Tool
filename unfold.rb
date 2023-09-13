@@ -19,6 +19,36 @@ def angle_in_plane(axis, point1, point2)
   vector1 * vector2 % axis[1] > 0 ? angle : -angle
 end
 
+# Return new vector transformed as a normal.
+#
+# Transforming a normal vector as a ordinary vector can give it a faulty
+# direction if the transformation is non-uniformly scaled or sheared. This
+# method assures the vector stays perpendicular to its perpendicular plane
+# when a transformation is applied.
+#
+# @param normal [Geom::Vector3d]
+# @param transformation [Geom::Transformation]
+#
+# @return [Geom::Vector3d]
+def transform_as_normal(normal, transformation)
+  tangent = normal.axes[0].transform(transformation)
+  bi_tangent = normal.axes[1].transform(transformation)
+  normal = (tangent * bi_tangent).normalize
+
+  flipped?(transformation) ? normal.reverse : normal
+end
+
+# Test if transformation is flipped (mirrored).
+#
+# @param transformation [Geom::Transformation]
+#
+# @return [Boolean]
+def flipped?(transformation)
+  product = transformation.xaxis * transformation.yaxis
+
+  (product % transformation.zaxis).negative?
+end
+      
 # Unfold model to flat single plane.
 # Useful for parts being laser cut or printed on a single piece of paper.
 
@@ -69,10 +99,9 @@ class UnfoldTool
       
       @hovered_plane = [
         @hovered_face.vertices.first.position.transform(@hovered_face_transformation),
-        # TODO: Use transform as normal method as transformation may be sheared.
-        @hovered_face.normal.transform(@hovered_face_transformation)
+        transform_as_normal(@hovered_face.normal, @hovered_face_transformation)
       ]
-      # Adjust plane's origin point to where the cursor is.
+      # Adjust plane's "origin point" to where the cursor is.
       # This let us fold the geometry the right way, as there are two ways to
       # fold it onto the plane.
       ray = view.pickray(x, y)
@@ -90,7 +119,7 @@ class UnfoldTool
       rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
       # Unless its already on that plane.
       if rotation_axis
-        angle = angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0])
+        angle = angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0]) + Math::PI
         transformation = Geom::Transformation.rotation(*rotation_axis, angle)
         view.model.active_entities.transform_entities(transformation, view.model.selection)
       end
