@@ -48,19 +48,16 @@ def flipped?(transformation)
 
   (product % transformation.zaxis).negative?
 end
-      
+
 # Unfold model to flat single plane.
 # Useful for parts being laser cut or printed on a single piece of paper.
-
-# REVIEW: Starting with only component/group support.
-# Add raw face support later.
 
 class UnfoldTool
   def initalize
     @hovered_entity = nil
-    @hovered_plane = nil
     @start_plane = nil
-    
+    @hovered_plane = nil
+
     # Used for highlighting the hovered face
     # REVIEW: May change UX to select hovered entity for highlighting and draw a
     # square around the cursor to communicate the plane.
@@ -70,9 +67,9 @@ class UnfoldTool
   end
 
   def activate
-    # This tool cannot have a pre-selection.
-    # The user needs to pick a plane, not just an entity.
-    Sketchup.active_model.selection.clear
+    # Try pick a reference plane fro the pre-selection, if its flat.
+    @start_plane = plane_from_entities(Sketchup.active_model.selection)
+    Sketchup.active_model.selection.clear unless @start_plane
   end
 
   def draw(view)
@@ -88,15 +85,15 @@ class UnfoldTool
   def onMouseMove(flags, x, y, view)
     pick_helper = view.pick_helper
     pick_helper.do_pick(x, y)
-    
+
     @hovered_entity = pick_helper.best_picked
     @hovered_plane = nil
-    
+
     @hovered_face = view.pick_helper.picked_face
     if @hovered_face
       pick_index = pick_helper.count.times.find { |i| pick_helper.leaf_at(i) == @hovered_face }
       @hovered_face_transformation = pick_helper.transformation_at(pick_index)
-      
+
       @hovered_plane = [
         @hovered_face.vertices.first.position.transform(@hovered_face_transformation),
         transform_as_normal(@hovered_face.normal, @hovered_face_transformation)
@@ -113,7 +110,7 @@ class UnfoldTool
 
   def onLButtonUp(_flags, _x, _y, view)
     return unless @hovered_entity && @hovered_plane
-    
+
     # If something has already been selected, fold it to the clicked plane.
     unless view.model.selection.empty?
       rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
@@ -126,11 +123,31 @@ class UnfoldTool
     end
 
     # Add clicked thing to selection
+    # FIXME: When raw face gets rotated, it is destroyed and re-created, losing the object reference.
     view.model.selection.add(@hovered_entity)
-    
+
     # For next click, the just now clicked plane will be the starting plane for
     # the rotation.
     @start_plane = @hovered_plane
+  end
+
+  private
+
+  # @return [nil, Array(Geom::Point3d.new, Geom::Vector3d)]
+  #   nil if not flat.
+  def plane_from_entities(entities)
+    # TODO: Check inside groups and components
+    faces = entities.grep(Sketchup::Face)
+    return if faces.empty?
+
+    plane = [faces.first.vertices.first.position, faces.first.normal]
+
+    faces[1..-1].each do |face|
+      return unless face.vertices.first.position.on_plane?(plane)
+      return unless face.normal.parallel?(plane[1])
+    end
+
+    plane
   end
 end
 
