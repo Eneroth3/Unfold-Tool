@@ -134,23 +134,34 @@ class UnfoldTool
     # the rotation.
     @start_plane = @hovered_plane
   end
+  
+  # REVIEW: Add Alt to fold other way?
 
   private
 
   # @return [nil, Array(Geom::Point3d.new, Geom::Vector3d)]
   #   nil if not flat.
   def plane_from_entities(entities)
-    # TODO: Check inside groups and components
-    faces = entities.grep(Sketchup::Face)
-    return if faces.empty?
+    planes = []
+    traverse(entities) do |face, transformation|
+      next unless face.is_a?(Sketchup::Face)
 
-    planes = faces.map do |face|
-      [face.vertices.first.position, face.normal]
+      planes << [face.vertices.first.position.transform(transformation), transform_as_normal(face.normal, transformation)]
     end
 
+    return if planes.empty?
     return unless planes[1..-1].all? { |p| same_plane?(planes.first, p) }
 
     planes.first
+  end
+
+  def traverse(entities, transformation = IDENTITY, backtrace = [], &block)
+    entities.each do |entity|
+      yield entity, transformation, backtrace
+      if entity.respond_to?(:definition)
+        traverse(entity.definition.entities, entity.transformation * transformation, backtrace + [entity], &block)
+      end
+    end
   end
 end
 
