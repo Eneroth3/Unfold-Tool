@@ -103,7 +103,7 @@ class UnfoldTool
         transform_as_normal(@hovered_face.normal, @hovered_face_transformation)
       ]
       # Adjust plane's "origin point" to where the cursor is.
-      # This let us fold the geometry the right way, as there are two ways to
+      # This let us fold the geometry the expected way, as there are two ways to
       # fold it onto the plane.
       ray = view.pickray(x, y)
       @hovered_plane[0] = Geom.intersect_line_plane(ray, @hovered_plane)
@@ -134,8 +134,6 @@ class UnfoldTool
     # the rotation.
     @start_plane = @hovered_plane
   end
-  
-  # REVIEW: Add Alt to fold other way?
 
   private
 
@@ -146,7 +144,11 @@ class UnfoldTool
     traverse(entities) do |face, transformation|
       next unless face.is_a?(Sketchup::Face)
 
-      planes << [face.vertices.first.position.transform(transformation), transform_as_normal(face.normal, transformation)]
+      # Use face center point rather than arbitrary vertex as plane's point.
+      # This allow us to later fold n the expected direction.
+      point = face.bounds.center.project_to_plane(face.plane).transform(transformation)
+      normal = transform_as_normal(face.normal, transformation)
+      planes << [point, normal]
     end
 
     return if planes.empty?
