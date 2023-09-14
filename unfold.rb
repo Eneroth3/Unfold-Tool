@@ -122,12 +122,17 @@ class UnfoldTool
       if rotation_axis
         angle = angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0]) + Math::PI
         transformation = Geom::Transformation.rotation(*rotation_axis, angle)
-        view.model.active_entities.transform_entities(transformation, view.model.selection)
+        view.model.start_operation("Unfold", true)
+        # HACK: Temporarily group geometry to avoid adjacent geometry to be
+        # dragged along and to prevent faces from being triangulated and
+        # re-merged, losing its reference.
+        temp_group = view.model.active_entities.add_group(view.model.selection)
+        view.model.active_entities.transform_entities(transformation, temp_group)
+        view.model.selection.add(temp_group.explode.grep(Sketchup::Drawingelement))
+        view.model.commit_operation
       end
     end
 
-    # Add clicked thing to selection
-    # FIXME: When raw face gets rotated, it is destroyed and re-created, losing the object reference.
     view.model.selection.add(@hovered_entity)
 
     # For next click, the just now clicked plane will be the starting plane for
