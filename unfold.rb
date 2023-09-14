@@ -1,61 +1,116 @@
-# Calculate angle between two points, as seen along an axis.
-# Can return negative angles unlike Ruby APIs Vector3d.angleBetween method
-#
-# @param axis [Array(Geom::Point3d, Geom::Vector3d)]
-# @param point1 [Geom::Point3d]
-# @param point2 [Geom::Point3d]
-#
-# @return [Float] Angle in radians.
-def angle_in_plane(axis, point1, point2)
-  # Based on method from Eneroth 3D Rotate.
+# Various lierar algebra thingies not present in the Ruby API Geom module.
+module GeomHelper
+  # Calculate angle between two points, as seen along an axis.
+  # Can return negative angles unlike Ruby APIs Vector3d.angleBetween method
+  #
+  # @param axis [Array(Geom::Point3d, Geom::Vector3d)]
+  # @param point1 [Geom::Point3d]
+  # @param point2 [Geom::Point3d]
+  #
+  # @return [Float] Angle in radians.
+  def self.angle_in_plane(axis, point1, point2)
+    # Based on method from Eneroth 3D Rotate.
 
-  point1 = point1.project_to_plane(axis)
-  point2 = point2.project_to_plane(axis)
-  vector1 = point1 - axis[0]
-  vector2 = point2 - axis[0]
+    point1 = point1.project_to_plane(axis)
+    point2 = point2.project_to_plane(axis)
+    vector1 = point1 - axis[0]
+    vector2 = point2 - axis[0]
 
-  angle = vector1.angle_between(vector2)
+    angle = vector1.angle_between(vector2)
 
-  vector1 * vector2 % axis[1] > 0 ? angle : -angle
+    vector1 * vector2 % axis[1] > 0 ? angle : -angle
+  end
+
+  # Return new vector transformed as a normal.
+  #
+  # Transforming a normal vector as a ordinary vector can give it a faulty
+  # direction if the transformation is non-uniformly scaled or sheared. This
+  # method assures the vector stays perpendicular to its perpendicular plane
+  # when a transformation is applied.
+  #
+  # @param normal [Geom::Vector3d]
+  # @param transformation [Geom::Transformation]
+  #
+  # @return [Geom::Vector3d]
+  def self.transform_as_normal(normal, transformation)
+    tangent = normal.axes[0].transform(transformation)
+    bi_tangent = normal.axes[1].transform(transformation)
+    normal = (tangent * bi_tangent).normalize
+
+    flipped?(transformation) ? normal.reverse : normal
+  end
+
+  # Test if transformation is flipped (mirrored).
+  #
+  # @param transformation [Geom::Transformation]
+  #
+  # @return [Boolean]
+  def self.flipped?(transformation)
+    product = transformation.xaxis * transformation.yaxis
+
+    (product % transformation.zaxis).negative?
+  end
+
+  # Test if two planes are the same.
+  #
+  # @param plane1 [Array(Geom::Point3d.new, Geom::Vector3d)]
+  # @param plane2 [Array(Geom::Point3d.new, Geom::Vector3d)]
+  #
+  # @return [Boolean]
+  def self.same_plane?(plane1, plane2)
+    plane2[0].on_plane?(plane1) && plane2[1].parallel?(plane1[1])
+  end
 end
 
-# Return new vector transformed as a normal.
-#
-# Transforming a normal vector as a ordinary vector can give it a faulty
-# direction if the transformation is non-uniformly scaled or sheared. This
-# method assures the vector stays perpendicular to its perpendicular plane
-# when a transformation is applied.
-#
-# @param normal [Geom::Vector3d]
-# @param transformation [Geom::Transformation]
-#
-# @return [Geom::Vector3d]
-def transform_as_normal(normal, transformation)
-  tangent = normal.axes[0].transform(transformation)
-  bi_tangent = normal.axes[1].transform(transformation)
-  normal = (tangent * bi_tangent).normalize
+# Helper methods to deal with SketchUp Entities collections.
+module EntitiesHelper
+  # Extract plane from entities. Works on raw faces and faces in groups or
+  # components.
+  #
+  # @param entities [Sketchup::Entities, Sketchup::Selection, Array<Sketchup::Drawingelement>]
+  #
+  # @return [Array(Geom::Point3d.new, Geom::Vector3d), nil]
+  #  `nil` if not flat.
+  def self.plane_from_entities(entities)
+    planes = []
+    traverse(entities) do |face, transformation|
+      next unless face.is_a?(Sketchup::Face)
 
-  flipped?(transformation) ? normal.reverse : normal
-end
+      planes << [
+        face.vertices.first.position.transform(transformation),
+        GeomHelper.transform_as_normal(face.normal, transformation)
+      ]
+    end
 
-# Test if transformation is flipped (mirrored).
-#
-# @param transformation [Geom::Transformation]
-#
-# @return [Boolean]
-def flipped?(transformation)
-  product = transformation.xaxis * transformation.yaxis
+    return if planes.empty?
+    return unless planes[1..-1].all? { |p| GeomHelper.same_plane?(planes.first, p) }
 
-  (product % transformation.zaxis).negative?
-end
+    planes.first
+  end
 
-def same_plane?(plane1, plane2)
-  plane2[0].on_plane?(plane1) && plane2[1].parallel?(plane1[1])
+  # Iterate recursively over entities and yield for each entity.
+  #
+  # @param entities [Sketchup::Entities, Sketchup::Selection, Array<Sketchup::Drawingelement>]
+  # @param transformation [Geom::Transformation]
+  # @param backtrace [Array<Sketchup::Group, Sketchup::ComponentInstance>]
+  #
+  # @yieldparam entity [Sketchup::Drawingelement]
+  # @yieldparam transformation [Geom::Transformation]
+  # @yieldparam backtrace [Array<Sketchup::Group, Sketchup::ComponentInstance>]
+  def self.traverse(entities, transformation = IDENTITY, backtrace = [], &block)
+    entities.each do |entity|
+      yield entity, transformation, backtrace
+      if entity.respond_to?(:definition)
+        traverse(entity.definition.entities, entity.transformation * transformation, backtrace + [entity], &block)
+      end
+    end
+  end
 end
 
 # Unfold model to flat single plane.
 # Useful for parts being laser cut or printed on a single piece of paper.
 
+# Tool for unfolding entities to a single plane.
 class UnfoldTool
   def initalize
     @hovered_entity = nil
@@ -63,16 +118,21 @@ class UnfoldTool
     @hovered_plane = nil
 
     # Used for highlighting the hovered face
-    # REVIEW: May change UX to select hovered entity for highlighting and draw a
-    # square around the cursor to communicate the plane.
-    # May use InputPoint and not pickHelper
     @hovered_face = nil
     @hovered_face_transformation = nil
   end
 
   def activate
     # Try pick a reference plane fro the pre-selection, if its flat.
-    @start_plane = plane_from_entities(Sketchup.active_model.selection)
+    @start_plane = EntitiesHelper.plane_from_entities(Sketchup.active_model.selection)
+    if @start_plane
+      # Adjust plane's "origin" point to somewhere inside the selection, not an
+      # outer vertex.
+      # This let us fold the geometry the expected way, as there are two ways to
+      # fold it onto the plane.
+      @start_plane[0] = Sketchup.active_model.selection.first.bounds.center.project_to_plane(@start_plane)
+    end
+
     Sketchup.active_model.selection.clear unless @start_plane
   end
 
@@ -100,7 +160,7 @@ class UnfoldTool
 
       @hovered_plane = [
         @hovered_face.vertices.first.position.transform(@hovered_face_transformation),
-        transform_as_normal(@hovered_face.normal, @hovered_face_transformation)
+        GeomHelper.transform_as_normal(@hovered_face.normal, @hovered_face_transformation)
       ]
       # Adjust plane's "origin point" to where the cursor is.
       # This let us fold the geometry the expected way, as there are two ways to
@@ -116,22 +176,7 @@ class UnfoldTool
     return unless @hovered_entity && @hovered_plane
 
     # If something has already been selected, fold it to the clicked plane.
-    unless view.model.selection.empty?
-      rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
-      # Unless its already on that plane.
-      if rotation_axis
-        angle = angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0]) + Math::PI
-        transformation = Geom::Transformation.rotation(*rotation_axis, angle)
-        view.model.start_operation("Unfold", true)
-        # HACK: Temporarily group geometry to avoid adjacent geometry to be
-        # dragged along and to prevent faces from being triangulated and
-        # re-merged, losing its reference.
-        temp_group = view.model.active_entities.add_group(view.model.selection)
-        view.model.active_entities.transform_entities(transformation, temp_group)
-        view.model.selection.add(temp_group.explode.grep(Sketchup::Drawingelement))
-        view.model.commit_operation
-      end
-    end
+    rotate_selection(view) unless view.model.selection.empty?
 
     view.model.selection.add(@hovered_entity)
 
@@ -140,35 +185,31 @@ class UnfoldTool
     @start_plane = @hovered_plane
   end
 
+  # TODO: Set up statusbar text.
+
+  # REVIEW: Hold modifier key (Alt?) to fold the clicked entity towards the
+  # selection, instead of the other way around. Use to pick up flaps along the
+  # way.
+
   private
 
-  # @return [nil, Array(Geom::Point3d.new, Geom::Vector3d)]
-  #   nil if not flat.
-  def plane_from_entities(entities)
-    planes = []
-    traverse(entities) do |face, transformation|
-      next unless face.is_a?(Sketchup::Face)
+  def rotate_selection(view)
+    rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
 
-      # Use face center point rather than arbitrary vertex as plane's point.
-      # This allow us to later fold n the expected direction.
-      point = face.bounds.center.project_to_plane(face.plane).transform(transformation)
-      normal = transform_as_normal(face.normal, transformation)
-      planes << [point, normal]
-    end
+    # Already on the right plane.
+    return unless rotation_axis
 
-    return if planes.empty?
-    return unless planes[1..-1].all? { |p| same_plane?(planes.first, p) }
+    angle = GeomHelper.angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0]) + Math::PI
+    transformation = Geom::Transformation.rotation(*rotation_axis, angle)
 
-    planes.first
-  end
-
-  def traverse(entities, transformation = IDENTITY, backtrace = [], &block)
-    entities.each do |entity|
-      yield entity, transformation, backtrace
-      if entity.respond_to?(:definition)
-        traverse(entity.definition.entities, entity.transformation * transformation, backtrace + [entity], &block)
-      end
-    end
+    view.model.start_operation("Unfold", true)
+    # HACK: Temporarily group geometry to avoid adjacent geometry to be
+    # dragged along and to prevent faces from being triangulated and
+    # re-merged, losing its reference.
+    temp_group = view.model.active_entities.add_group(view.model.selection)
+    view.model.active_entities.transform_entities(transformation, temp_group)
+    view.model.selection.add(temp_group.explode.grep(Sketchup::Drawingelement))
+    view.model.commit_operation
   end
 end
 
