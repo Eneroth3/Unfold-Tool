@@ -27,6 +27,8 @@ module Eneroth
         end
 
         Sketchup.active_model.selection.clear unless @start_plane
+
+        update_statusbar
       end
 
       def draw(view)
@@ -76,15 +78,28 @@ module Eneroth
         # For next click, the just now clicked plane will be the starting plane for
         # the rotation.
         @start_plane = @hovered_plane
+
+        update_statusbar
       end
 
-      # TODO: Set up statusbar text.
+      def resume(view)
+        update_statusbar
+      end
 
       # REVIEW: Hold modifier key (Alt?) to fold the clicked entity towards the
       # selection, instead of the other way around. Use to pick up flaps along the
       # way.
 
       private
+
+      def update_statusbar
+        Sketchup.status_text =
+          if Sketchup.active_model.selection.empty?
+            "Select a face, a group or component."
+          else
+            "Click face to fold selection to its plane." #  Alt = Fold clicked face to selection.
+          end
+      end
 
       def rotate_selection(view)
         rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
