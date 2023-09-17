@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Eneroth
   module UnfoldTool
     # Various lierar algebra thingies not present in the Ruby API Geom module.

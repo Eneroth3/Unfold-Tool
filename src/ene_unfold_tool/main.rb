@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Eneroth
   module UnfoldTool
     Sketchup.require "#{PLUGIN_ROOT}/geom_helper"
@@ -29,6 +31,8 @@ module Eneroth
         @transformation = nil
       end
 
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def activate
         # Try pick a reference plane fro the pre-selection, if its flat.
         @start_plane = EntitiesHelper.plane_from_entities(Sketchup.active_model.selection)
@@ -45,6 +49,14 @@ module Eneroth
         update_statusbar
       end
 
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def deactivate(view)
+        view.invalidate
+      end
+
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def draw(view)
         return unless @hovered_face
 
@@ -55,7 +67,18 @@ module Eneroth
         view.draw(GL_LINE_LOOP, corners)
       end
 
-      def onMouseMove(flags, x, y, view)
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def getExtents
+        # We only draw within the existing model bounds to highlight a hovered
+        # face. This method isn't technically needed but Rubocop shouts as us if
+        # we don't have it.
+        Sketchup.active_model.bounds
+      end
+
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def onMouseMove(_flags, x, y, view)
         pick_helper = view.pick_helper
         pick_helper.do_pick(x, y)
 
@@ -81,10 +104,12 @@ module Eneroth
         view.invalidate
       end
 
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def onLButtonUp(flags, _x, _y, view)
         return unless @hovered_entity && @hovered_plane
 
-        alt_down = flags & ALT_MODIFIER_MASK  == ALT_MODIFIER_MASK
+        alt_down = flags & ALT_MODIFIER_MASK == ALT_MODIFIER_MASK
 
         # If something has already been selected, fold it to the clicked plane.
         unless view.model.selection.empty?
@@ -106,18 +131,28 @@ module Eneroth
         view.invalidate
       end
 
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def resume(view)
+        view.invalidate
         update_statusbar
+      end
+
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def suspend(view)
+        view.invalidate
       end
 
       private
 
+      # Set the SketchUp statusbar text.
       def update_statusbar
         alt_key_name = Sketchup.platform == :platform_win ? "Alt" : "Command"
 
         Sketchup.status_text =
           if Sketchup.active_model.selection.empty?
-            "Select a face, a group or component."
+            "Select a face, a group or component to fold."
           else
             "Click face to fold selection to its plane. "\
             "#{alt_key_name} = Fold clicked face to selection."

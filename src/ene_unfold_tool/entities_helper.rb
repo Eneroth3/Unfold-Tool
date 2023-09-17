@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Eneroth
   module UnfoldTool
     Sketchup.require "#{PLUGIN_ROOT}/geom_helper"
