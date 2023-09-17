@@ -67,19 +67,22 @@ module Eneroth
         view.invalidate
       end
 
-      def onLButtonUp(_flags, _x, _y, view)
+      def onLButtonUp(flags, _x, _y, view)
         return unless @hovered_entity && @hovered_plane
 
+        alt_down = flags & ALT_MODIFIER_MASK  == ALT_MODIFIER_MASK
+
         # If something has already been selected, fold it to the clicked plane.
-        rotate_selection(view) unless view.model.selection.empty?
+        rotate_selection(view, alt_down) unless view.model.selection.empty?
 
         view.model.selection.add(@hovered_entity)
 
-        # For next click, the just now clicked plane will be the starting plane for
-        # the rotation.
+        # For the next click, the just now clicked plane will be the starting
+        # plane for the rotation.
         @start_plane = @hovered_plane
 
         update_statusbar
+        view.invalidate
       end
 
       def resume(view)
@@ -101,7 +104,19 @@ module Eneroth
           end
       end
 
-      def rotate_selection(view)
+      # Rotate the selection onto the picked plane.
+      #
+      # @param view [Sketchup::View]
+      def rotate_selection(view, swapped)
+        # Special case of rotating the clicked entity to the selection, not the
+        # other way around.
+        if swapped
+          @start_plane, @hovered_plane = @hovered_plane, @start_plane
+          old_selection = view.model.selection.to_a
+          view.model.selection.clear
+          view.model.selection.add(@hovered_entity)
+        end
+
         rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
 
         # Already on the right plane.
@@ -111,13 +126,24 @@ module Eneroth
         transformation = Geom::Transformation.rotation(*rotation_axis, angle)
 
         view.model.start_operation("Unfold", true)
-        # HACK: Temporarily group geometry to avoid adjacent geometry to be
-        # dragged along and to prevent faces from being triangulated and
-        # re-merged, losing its reference.
+        # HACK: Temporarily group geometry being moved to avoid adjacent
+        # geometry to be dragged along, and to prevent faces from being
+        # triangulated and re-merged, losing them from the selection.
         temp_group = view.model.active_entities.add_group(view.model.selection)
         view.model.active_entities.transform_entities(transformation, temp_group)
         view.model.selection.add(temp_group.explode.grep(Sketchup::Drawingelement))
         view.model.commit_operation
+
+        # Special case of rotating the clicked entity to the selection, not the
+        # other way around.
+        if swapped
+          # Should only be one object selected.
+          @hovered_entity = view.model.selection.first
+          view.model.selection.clear
+          view.model.selection.add(old_selection)
+          # Make sure preview is clicked face doesn't linger in old location.
+          @hovered_face_transformation *= transformation
+        end
       end
     end
 
