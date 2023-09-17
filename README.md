@@ -10,5 +10,5 @@ Click on a face you want to fold and then another face to fold onto its plane.
 Keep clicking to unfold a series of faces.
 
 To pick up a branching face along the way, e.g. a flap, hold Alt (Command on
-Mac)to fold the clicked face onto the plane of the selection, rather than the
+Mac) to fold the clicked face onto the plane of the selection, rather than the
 other way around.

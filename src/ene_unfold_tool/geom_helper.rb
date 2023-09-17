@@ -14,6 +14,8 @@ module Eneroth
       # @return [Float] Angle in radians.
       def self.angle_in_plane(axis, point1, point2)
         # Based on method from Eneroth 3D Rotate.
+        # REVIEW: Have nicer method in Solar North that can be used.
+        # Also one in UprightExtruder2.
 
         point1 = point1.project_to_plane(axis)
         point2 = point2.project_to_plane(axis)
