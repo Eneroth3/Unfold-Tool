@@ -4,6 +4,14 @@ module Eneroth
     Sketchup.require "#{PLUGIN_ROOT}/entities_helper"
 
     # Tool for unfolding entities to a single plane.
+    #
+    # Whereas many SketchUp tool have several distinct stages or phases (first
+    # click, second click, third click...) this only has one stage: rotate the
+    # selection to the plane of the clicked face and then add it to the
+    # selection. If activated without a selection (or a selection that isn't
+    # planar and therefore invalid) the clicked face (or its parent container)
+    # is simply just added to the selection, and the rotating starts with the
+    # next click.
     class UnfoldTool
       def initalize
         @hovered_entity = nil
@@ -13,6 +21,12 @@ module Eneroth
         # Used for highlighting the hovered face
         @hovered_face = nil
         @hovered_face_transformation = nil
+
+        # Keep track of these things to handle special case of holding Alt to
+        # rotate clicked entity to selection's plane and not the other way
+        # around.
+        @old_selection = nil
+        @transformation = nil
       end
 
       def activate
@@ -73,7 +87,14 @@ module Eneroth
         alt_down = flags & ALT_MODIFIER_MASK  == ALT_MODIFIER_MASK
 
         # If something has already been selected, fold it to the clicked plane.
-        rotate_selection(view, alt_down) unless view.model.selection.empty?
+        unless view.model.selection.empty?
+          # If Alt is held down, temporarily swap selection and hovered entity.
+          # Useful to pick up a branching face along the way when unfolding
+          # several faces.
+          pre_rotate_swap(view) if alt_down
+          rotate_selection(view)
+          post_rotate_swap(view) if alt_down
+        end
 
         view.model.selection.add(@hovered_entity)
 
@@ -89,61 +110,62 @@ module Eneroth
         update_statusbar
       end
 
-      # REVIEW: Hold modifier key (Alt?) to fold the clicked entity towards the
-      # selection, instead of the other way around. Use to pick up flaps along the
-      # way.
-
       private
 
       def update_statusbar
+        alt_key_name = Sketchup.platform == :platform_win ? "Alt" : "Command"
+
         Sketchup.status_text =
           if Sketchup.active_model.selection.empty?
             "Select a face, a group or component."
           else
-            "Click face to fold selection to its plane." #  Alt = Fold clicked face to selection.
+            "Click face to fold selection to its plane. "\
+            "#{alt_key_name} = Fold clicked face to selection."
           end
       end
 
       # Rotate the selection onto the picked plane.
       #
       # @param view [Sketchup::View]
-      def rotate_selection(view, swapped)
-        # Special case of rotating the clicked entity to the selection, not the
-        # other way around.
-        if swapped
-          @start_plane, @hovered_plane = @hovered_plane, @start_plane
-          old_selection = view.model.selection.to_a
-          view.model.selection.clear
-          view.model.selection.add(@hovered_entity)
-        end
-
+      def rotate_selection(view)
         rotation_axis = Geom.intersect_plane_plane(@start_plane, @hovered_plane)
 
         # Already on the right plane.
         return unless rotation_axis
 
         angle = GeomHelper.angle_in_plane(rotation_axis, @start_plane[0], @hovered_plane[0]) + Math::PI
-        transformation = Geom::Transformation.rotation(*rotation_axis, angle)
+        @transformation = Geom::Transformation.rotation(*rotation_axis, angle)
 
         view.model.start_operation("Unfold", true)
         # HACK: Temporarily group geometry being moved to avoid adjacent
         # geometry to be dragged along, and to prevent faces from being
         # triangulated and re-merged, losing them from the selection.
         temp_group = view.model.active_entities.add_group(view.model.selection)
-        view.model.active_entities.transform_entities(transformation, temp_group)
+        view.model.active_entities.transform_entities(@transformation, temp_group)
         view.model.selection.add(temp_group.explode.grep(Sketchup::Drawingelement))
         view.model.commit_operation
+      end
 
-        # Special case of rotating the clicked entity to the selection, not the
-        # other way around.
-        if swapped
-          # Should only be one object selected.
-          @hovered_entity = view.model.selection.first
-          view.model.selection.clear
-          view.model.selection.add(old_selection)
-          # Make sure preview is clicked face doesn't linger in old location.
-          @hovered_face_transformation *= transformation
-        end
+      # Swap selection and clicked face before a rotation.
+      #
+      # @param view [Sketchup::View]
+      def pre_rotate_swap(view)
+        @start_plane, @hovered_plane = @hovered_plane, @start_plane
+        @old_selection = view.model.selection.to_a
+        view.model.selection.clear
+        view.model.selection.add(@hovered_entity)
+      end
+
+      # Swap back selection and clicked face after a rotation.
+      #
+      # @param view [Sketchup::View]
+      def post_rotate_swap(view)
+        # Should only be one object selected.
+        @hovered_entity = view.model.selection.first
+        view.model.selection.clear
+        view.model.selection.add(@old_selection)
+        # Make sure preview is clicked face doesn't linger in old location.
+        @hovered_face_transformation = @transformation * @hovered_face_transformation
       end
     end
 
