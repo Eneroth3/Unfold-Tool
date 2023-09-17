@@ -78,6 +78,20 @@ module Eneroth
 
       # @api
       # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def onCancel(_reason, view)
+        # The grouping and exploding done when rotating means the objects are
+        # lost from the selection when undoing.
+        # Might as well empty the whole selection and reset the tool.
+        view.model.selection.clear
+        @hovered_entity = nil
+        @start_plane = nil
+        @hovered_plane = nil
+        @hovered_face = nil
+        @hovered_face_transformation = nil
+      end
+
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def onMouseMove(_flags, x, y, view)
         pick_helper = view.pick_helper
         pick_helper.do_pick(x, y)
