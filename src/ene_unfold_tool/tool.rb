@@ -212,9 +212,10 @@ module Eneroth
       def post_rotate_swap(view)
         # Should only be one object selected.
         @hovered_entity = view.model.selection.first
-        view.model.selection.clear
-        view.model.selection.add(@old_selection)
-        # Make sure preview is clicked face doesn't linger in old location.
+        # Extra safe guard as faces can be split and merged and deleted when moved.
+        @hovered_face = nil if @hovered_face.deleted?
+        view.model.selection.add(@old_selection.select(&:valid?))
+        # Make sure outline of clicked face doesn't linger on old location.
         @hovered_face_transformation = @transformation * @hovered_face_transformation
       end
     end
