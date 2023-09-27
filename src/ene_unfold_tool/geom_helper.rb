@@ -54,7 +54,7 @@ module Eneroth
       def self.flipped?(transformation)
         product = transformation.xaxis * transformation.yaxis
 
-        (product % transformation.zaxis).negative?
+        (product % transformation.zaxis) < 0
       end
 
       # Test if two planes are the same.
