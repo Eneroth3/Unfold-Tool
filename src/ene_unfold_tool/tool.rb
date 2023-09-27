@@ -79,6 +79,12 @@ module Eneroth
 
       # @api
       # @see https://ruby.sketchup.com/Sketchup/Tool.html
+      def getInstructorContentDirectory
+        "#{PLUGIN_ROOT}/instructor/unfold_tool.html"
+      end
+
+      # @api
+      # @see https://ruby.sketchup.com/Sketchup/Tool.html
       def onCancel(_reason, view)
         # The grouping and exploding done when rotating means the objects are
         # lost from the selection when undoing.

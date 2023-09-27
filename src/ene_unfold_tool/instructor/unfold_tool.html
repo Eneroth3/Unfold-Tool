@@ -1,0 +1,35 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <link href="instructor.css" rel="stylesheet">
+    <style type="text/css">
+      .mac .win, .win .mac { display: none; }
+    </style>
+    <script type="text/javascript">
+      window.onload = function() {
+        isMac = navigator.platform.indexOf('Win') == -1;
+        document.body.className = isMac ? 'mac' : 'win';
+      }
+    </script>
+  </head>
+  <body class="win">
+    <img src="unfold_tool.gif" alt="" />
+    <h1>Unfold Tool</h1>
+    <ul>
+      <li>Unfold faces to single plane.</li>
+    </ul>
+    <h2>Tool Operation</h2>
+    <ol>
+      <li>Click face to fold.</li>
+      <li>Click face to fold it towards.</li>
+      <li>(Optional) Keep clicking faces.</li>
+    </ol>
+    <h2>Modifier Keys</h2>
+    <ul>
+      <li><span class="win">Alt</span><span class="mac">Command</span> = Fold clicked face to selection instead of vice versa.</li>
+    </ul>
+    <p>
+      <a target="_blank" href="https://extensions.sketchup.com/extension/abae6f22-8b33-474d-8807-2c32da35e975-eneroth-unfold-tool">Learn more...</a>
+    </p>
+  </body>
+</html>
