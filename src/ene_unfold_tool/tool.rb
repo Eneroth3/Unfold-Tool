@@ -165,6 +165,11 @@ module Eneroth
         view.invalidate
       end
 
+      # @see https://extensions.sketchup.com/pl/content/eneroth-tool-memory
+      def ene_tool_cycler_icon
+        "#{PLUGIN_ROOT}/icons/unfold.svg"
+      end
+
       private
 
       # Set the SketchUp statusbar text.

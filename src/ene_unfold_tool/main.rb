@@ -4,13 +4,13 @@ module Eneroth
   module UnfoldTool
     Sketchup.require "#{PLUGIN_ROOT}/tool"
     Sketchup.require "#{PLUGIN_ROOT}/tool_helper"
+    Sketchup.require "#{PLUGIN_ROOT}/command_helper"
 
     unless @loaded
       @loaded = true
 
       command = ToolHelper.create_command(Tool, EXTENSION.name, EXTENSION.description)
-      # TODO: Add command icon. Use UIHelper from several recent extensions.
-      # Also add for Eneroth Tool Memory.
+      CommandHelper.add_icon(command, "#{PLUGIN_ROOT}/icons/unfold")
 
       toolbar = UI::Toolbar.new(EXTENSION.name)
       toolbar.add_item(command)
