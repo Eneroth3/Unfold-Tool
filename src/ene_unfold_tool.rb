@@ -23,7 +23,7 @@ module Eneroth
 
     EXTENSION.creator     = "Eneroth"
     EXTENSION.description = "Unfold to single plane. Useful for paper models and laser cutting."
-    EXTENSION.version     = "1.0.1"
+    EXTENSION.version     = "1.0.2"
     EXTENSION.copyright   = "2023, #{EXTENSION.creator}"
     Sketchup.register_extension(EXTENSION, true)
   end
